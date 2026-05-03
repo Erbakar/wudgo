@@ -1,13 +1,24 @@
 import { GoogleGenAI } from "@google/genai";
 
-// Initialize Gemini with the API key provided by the environment
-// Vite will replace 'process.env.GEMINI_API_KEY' with the actual value during build
-const ai = new GoogleGenAI({ 
-  apiKey: process.env.GEMINI_API_KEY 
-});
+let aiInstance: GoogleGenAI | null = null;
+
+const getAI = () => {
+  if (!aiInstance) {
+    const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
+    
+    if (!apiKey) {
+      console.warn("GEMINI_API_KEY is not defined. Please set it in your environment variables.");
+      throw new Error("Gemini API anahtarı ayarlanmamış. Lütfen ortam değişkenlerini kontrol edin.");
+    }
+    
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+};
 
 export const generateText = async (prompt: string, systemInstruction?: string) => {
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
@@ -15,7 +26,7 @@ export const generateText = async (prompt: string, systemInstruction?: string) =
         systemInstruction,
       },
     });
-    return response.text;
+    return response.text || "";
   } catch (error) {
     console.error("Error generating text:", error);
     throw error;
@@ -27,6 +38,7 @@ export const generateImage = async (
   aspectRatio: "1:1" | "16:9" | "9:16" | "4:3" | "3:4" = "1:1"
 ) => {
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-image",
       contents: {
@@ -61,6 +73,7 @@ export const editImage = async (
   aspectRatio: "1:1" | "16:9" | "9:16" | "4:3" | "3:4" = "1:1"
 ) => {
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-image",
       contents: {
