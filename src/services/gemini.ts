@@ -24,19 +24,17 @@ export const generateText = async (prompt: string, systemInstruction?: string) =
 
 export const generateImage = async (
   prompt: string, 
-  aspectRatio: "1:1" | "16:9" | "9:16" | "4:3" | "3:4" | "1:4" | "1:8" | "4:1" | "8:1" = "1:1",
-  imageSize: "512px" | "1K" | "2K" | "4K" = "1K"
+  aspectRatio: "1:1" | "16:9" | "9:16" | "4:3" | "3:4" = "1:1"
 ) => {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash-image-preview",
+      model: "gemini-2.5-flash-image",
       contents: {
         parts: [{ text: prompt }],
       },
       config: {
         imageConfig: {
           aspectRatio,
-          imageSize,
         },
       },
     });
@@ -60,12 +58,11 @@ export const generateImage = async (
 export const editImage = async (
   base64Image: string, 
   prompt: string,
-  aspectRatio: "1:1" | "16:9" | "9:16" | "4:3" | "3:4" | "1:4" | "1:8" | "4:1" | "8:1" = "1:1",
-  imageSize: "512px" | "1K" | "2K" | "4K" = "1K"
+  aspectRatio: "1:1" | "16:9" | "9:16" | "4:3" | "3:4" = "1:1"
 ) => {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3.1-flash-image-preview",
+      model: "gemini-2.5-flash-image",
       contents: {
         parts: [
           {
@@ -80,7 +77,6 @@ export const editImage = async (
       config: {
         imageConfig: {
           aspectRatio,
-          imageSize,
         },
       },
     });

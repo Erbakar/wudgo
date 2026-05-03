@@ -2,11 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useAuth } from '../lib/AuthContext';
 import { db } from '../lib/firebase';
-import { collection, addDoc, serverTimestamp, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 import { generateImage, editImage } from '../services/gemini';
-import { Image as ImageIcon, Upload, Wand2, Download, RefreshCw, Layers, History, Edit2 } from 'lucide-react';
+import { Image as ImageIcon, Upload, Wand2, Download, RefreshCw, Layers, History, Edit2, Trash2 } from 'lucide-react';
 
-export default function ImageStudio() {
+interface ImageStudioProps {
+  editItem?: any;
+}
+
+export default function ImageStudio({ editItem }: ImageStudioProps) {
   const { user } = useAuth();
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,6 +20,28 @@ export default function ImageStudio() {
   const [history, setHistory] = useState<any[]>([]);
   const [width, setWidth] = useState(1024);
   const [height, setHeight] = useState(1024);
+  const [products, setProducts] = useState<any[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, 'products'), where('userId', '==', user.uid));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribe();
+  }, [user]);
+
+  useEffect(() => {
+    if (editItem && (editItem.type === 'image' || editItem.type === 'logo')) {
+      setMode('edit');
+      setSelectedImage(editItem.content);
+      setPrompt(editItem.prompt || '');
+      setResult(editItem.content);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [editItem]);
 
   const getEffectiveParams = () => {
     const ratio = width / height;
@@ -24,27 +50,15 @@ export default function ImageStudio() {
       { name: "4:3", val: 4/3 },
       { name: "3:4", val: 3/4 },
       { name: "16:9", val: 16/9 },
-      { name: "9:16", val: 9/16 },
-      { name: "1:4", val: 1/4 },
-      { name: "1:8", val: 1/8 },
-      { name: "4:1", val: 4.0 },
-      { name: "8:1", val: 8.0 }
+      { name: "9:16", val: 9/16 }
     ];
 
     const bestRatio = supportedRatios.reduce((prev, curr) => 
       Math.abs(curr.val - ratio) < Math.abs(prev.val - ratio) ? curr : prev
     );
 
-    const maxDim = Math.max(width, height);
-    let size: "512px" | "1K" | "2K" | "4K" = "1K";
-    if (maxDim <= 512) size = "512px";
-    else if (maxDim <= 1024) size = "1K";
-    else if (maxDim <= 2048) size = "2K";
-    else size = "4K";
-
     return { 
-      aspectRatio: bestRatio.name as any, 
-      imageSize: size 
+      aspectRatio: bestRatio.name as any
     };
   };
 
@@ -53,27 +67,61 @@ export default function ImageStudio() {
     const q = query(
       collection(db, 'content'),
       where('userId', '==', user.uid),
-      where('type', '==', 'image'),
       orderBy('createdAt', 'desc')
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setHistory(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const allItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setHistory(allItems.filter((item: any) => item.type === 'image'));
     });
     return () => unsubscribe();
   }, [user]);
 
+  const compressImage = (base64Str: string, maxWidth = 1024, maxHeight = 1024, quality = 0.75): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64Str;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width *= maxHeight / height;
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+    });
+  };
+
   const handleGenerate = async () => {
-    if (!prompt) return;
+    if (!prompt || !user) return;
     setLoading(true);
-    const { aspectRatio, imageSize } = getEffectiveParams();
+    const { aspectRatio } = getEffectiveParams();
     try {
-      const imageUrl = await generateImage(prompt, aspectRatio, imageSize);
-      setResult(imageUrl);
+      const imageUrl = await generateImage(prompt, aspectRatio);
+      
+      // Compress before saving to ensure history works even with large images
+      const compressed = await compressImage(imageUrl);
+      setResult(imageUrl); // Show full res in preview if possible
+      
       await addDoc(collection(db, 'content'), {
-        userId: user?.uid,
+        userId: user.uid,
         type: 'image',
         title: prompt.slice(0, 30),
-        content: imageUrl,
+        content: compressed,
         prompt,
         createdAt: serverTimestamp(),
       });
@@ -85,17 +133,19 @@ export default function ImageStudio() {
   };
 
   const handleEdit = async () => {
-    if (!prompt || !selectedImage) return;
+    if (!prompt || !selectedImage || !user) return;
     setLoading(true);
-    const { aspectRatio, imageSize } = getEffectiveParams();
+    const { aspectRatio } = getEffectiveParams();
     try {
-      const imageUrl = await editImage(selectedImage, prompt, aspectRatio, imageSize);
+      const imageUrl = await editImage(selectedImage, prompt, aspectRatio);
+      const compressed = await compressImage(imageUrl);
       setResult(imageUrl);
+      
       await addDoc(collection(db, 'content'), {
-        userId: user?.uid,
+        userId: user.uid,
         type: 'image',
         title: `Edit: ${prompt.slice(0, 20)}`,
-        content: imageUrl,
+        content: compressed,
         prompt,
         createdAt: serverTimestamp(),
       });
@@ -108,13 +158,73 @@ export default function ImageStudio() {
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    handleFile(file);
+  };
+
+  const handleFile = (file: File | undefined) => {
+    if (file && file.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onloadend = () => {
         setSelectedImage(reader.result as string);
         setMode('edit');
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    handleFile(file);
+  };
+
+  const handleUseAsProduct = async () => {
+    if (!result || !user) return;
+    try {
+      // Compress image to ensure it stays under 1MB Firestore limit
+      const compressedImageUrl = await compressImage(result);
+      
+      await addDoc(collection(db, 'products'), {
+        userId: user.uid,
+        name: prompt.slice(0, 30) || 'Yeni Ürün',
+        price: 0,
+        description: prompt,
+        imageUrl: compressedImageUrl,
+        createdAt: serverTimestamp(),
+      });
+      alert('Görsel başarıyla e-ticaret kataloğuna eklendi!');
+    } catch (error: any) {
+      if (error?.message?.includes('size')) {
+        alert('Görsel boyutu çok büyük olduğu için kaydedilemedi. Lütfen daha kısa bir tarif deneyin.');
+      }
+      console.error(error);
+    }
+  };
+
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (id: string) => {
+    if (deletingId !== id) {
+      setDeletingId(id);
+      setTimeout(() => setDeletingId(null), 3000);
+      return;
+    }
+    
+    try {
+      await deleteDoc(doc(db, 'content', id));
+      setDeletingId(null);
+    } catch (error) {
+      console.error('Silme hatası:', error);
     }
   };
 
@@ -140,15 +250,48 @@ export default function ImageStudio() {
             </button>
           </div>
 
+          {products.length > 0 && (
+            <div className="mb-6">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3">Ürünlerimden Referans Al</label>
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                {products.map((product) => (
+                  <button
+                    key={product.id}
+                    onClick={() => {
+                      if (mode === 'edit') {
+                        setSelectedImage(product.imageUrl);
+                      } else {
+                        setPrompt(prev => `${prev}\n\nÜrün Referansı: ${product.name} - ${product.description}`.trim());
+                      }
+                      setSelectedProduct(product);
+                    }}
+                    className={`flex-shrink-0 w-16 h-16 rounded-xl border-2 transition-all p-1 overflow-hidden ${selectedProduct?.id === product.id ? 'border-brand-accent bg-brand-accent/5' : 'border-gray-100 bg-white hover:border-gray-300'}`}
+                  >
+                    <img src={product.imageUrl} className="w-full h-full object-cover rounded-lg" alt={product.name} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {mode === 'edit' && (
             <div className="mb-6">
-              <label className="block w-full aspect-video border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:border-brand-accent transition-colors relative overflow-hidden">
+              <label 
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`block w-full aspect-video border-2 border-dashed rounded-2xl cursor-pointer transition-all relative overflow-hidden ${
+                  isDragging ? 'border-brand-accent bg-brand-accent/5 scale-[1.02]' : 'border-gray-200 hover:border-brand-accent'
+                }`}
+              >
                 {selectedImage ? (
                   <img src={selectedImage} className="w-full h-full object-cover" alt="Selected" />
                 ) : (
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
-                    <Upload className="w-8 h-8 mb-2" />
-                    <span className="text-sm font-medium">Düzenlemek için görsel yükleyin veya aşağıdan seçin</span>
+                    <Upload className={`w-8 h-8 mb-2 transition-transform ${isDragging ? 'scale-110' : ''}`} />
+                    <span className="text-sm font-medium px-4 text-center">
+                      {isDragging ? 'Görseli Buraya Bırakın' : 'Düzenlemek için görsel yükleyin veya sürükleyip bırakın'}
+                    </span>
                   </div>
                 )}
                 <input type="file" className="hidden" onChange={onFileChange} accept="image/*" />
@@ -195,9 +338,9 @@ export default function ImageStudio() {
               </div>
               <div className="col-span-2">
                 <div className="flex items-center justify-between px-1">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Hesaplanan Oran</span>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Eşleşen Oran</span>
                   <span className="bg-brand-accent/10 text-brand-accent text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
-                    {getEffectiveParams().aspectRatio} ({getEffectiveParams().imageSize})
+                    {getEffectiveParams().aspectRatio}
                   </span>
                 </div>
               </div>
@@ -233,7 +376,10 @@ export default function ImageStudio() {
                   <Download className="w-4 h-4" />
                   İndir
                 </a>
-                <button className="flex-1 bg-gray-50 text-brand-primary py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-gray-100 transition-all">
+                <button 
+                  onClick={handleUseAsProduct}
+                  className="flex-1 bg-gray-50 text-brand-primary py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-gray-100 transition-all"
+                >
                   <Layers className="w-4 h-4" />
                   Ürün Olarak Kullan
                 </button>
@@ -292,6 +438,17 @@ export default function ImageStudio() {
                     <Download className="w-3 h-3" />
                     İndir
                   </a>
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    className={`w-full backdrop-blur-md py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                      deletingId === item.id 
+                        ? 'bg-red-500 text-white' 
+                        : 'bg-red-500/20 text-white hover:bg-red-500'
+                    }`}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    {deletingId === item.id ? 'Onayla' : 'Sil'}
+                  </button>
                 </div>
               </motion.div>
             ))}
