@@ -17,7 +17,12 @@ async function startServer() {
   // AI Service Setup
   const getAI = () => {
     const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-    if (!apiKey) return null;
+    if (!apiKey) {
+      console.error("AI FAIL: No API key found in GEMINI_API_KEY or VITE_GEMINI_API_KEY");
+      return null;
+    }
+    // Log a masked version for debugging
+    console.log(`AI INFO: Initializing with key ending in: ...${apiKey.slice(-4)}`);
     return new GoogleGenAI({ apiKey });
   };
 
