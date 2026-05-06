@@ -47,8 +47,17 @@ interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  
+  // Specific check for unauthorized domain
+  if (errorMessage.includes('auth/unauthorized-domain')) {
+    console.error('CRITICAL: Bu domain (wutgo.netlify.app vb.) Firebase Console üzerinden yetkilendirilmemiş. ');
+    console.error('Çözüm: Firebase Console > Authentication > Settings > Authorized Domains kısmına bu adresi ekleyin.');
+    alert('Hata: Bu site Firebase üzerinde yetkilendirilmemiş. Lütfen Firebase Console üzerinden domain ayarlarını yapın.');
+  }
+
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errorMessage,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
@@ -76,10 +85,13 @@ async function testConnection() {
       console.log("Firestore connection successful");
     }
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration. The client is reporting offline.");
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes('offline') || msg.includes('network-error')) {
+      console.error("Firebase çevrimdışı veya bağlantı hatası. Lütfen API key'lerin ve Authorized Domains ayarlarının doğru olduğunu kontrol edin.");
+    } else if (msg.includes('permission-denied')) {
+       console.log("Firestore yetki hatası (normal olabilir)");
     } else {
-      console.warn("Firestore connection test failed (this might be normal if the doc doesn't exist):", error);
+      console.warn("Firestore connection test failed:", error);
     }
   }
 }

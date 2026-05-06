@@ -7,8 +7,12 @@ export const generateText = async (prompt: string, systemInstruction?: string) =
       body: JSON.stringify({ prompt, systemInstruction }),
     });
 
+    if (response.status === 404) {
+      throw new Error("Sunucu API rotası bulunamadı. (Netlify'a dist klasörünü yüklüyorsanız Express backend'i çalışmaz. Gemini'yi doğrudan istemcide kullanmak isterseniz bildirin.)");
+    }
+
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json().catch(() => ({ error: "Sunucu hatası" }));
       throw new Error(errorData.error || "Sunucu hatası");
     }
 
@@ -31,8 +35,12 @@ export const generateImage = async (
       body: JSON.stringify({ prompt, aspectRatio }),
     });
 
+    if (response.status === 404) {
+      throw new Error("Görsel oluşturma servisi bulunamadı (404).");
+    }
+
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json().catch(() => ({ error: "Görsel oluşturma hatası" }));
       throw new Error(errorData.error || "Görsel oluşturma hatası");
     }
 
@@ -56,8 +64,12 @@ export const editImage = async (
       body: JSON.stringify({ base64Image, prompt, aspectRatio }),
     });
 
+    if (response.status === 404) {
+      throw new Error("Görsel düzenleme servisi bulunamadı (404).");
+    }
+
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json().catch(() => ({ error: "Görsel düzenleme hatası" }));
       throw new Error(errorData.error || "Görsel düzenleme hatası");
     }
 
