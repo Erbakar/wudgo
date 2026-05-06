@@ -1,37 +1,19 @@
-import { GoogleGenAI } from "@google/genai";
-
-let aiInstance: GoogleGenAI | null = null;
-
-const getAI = () => {
-  if (!aiInstance) {
-    // Try to get key from multiple possible sources
-    const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || 
-                   (import.meta as any).env?.GEMINI_API_KEY || 
-                   "AIzaSyDrSupsS8lA3FC3-1GNEDA9qGiLkwCDUlE"; // User provided backup key
-    
-    if (!apiKey) {
-      console.warn("GEMINI_API_KEY missing. Check environment variables.");
-      return null;
-    }
-    
-    aiInstance = new GoogleGenAI({ apiKey });
-  }
-  return aiInstance;
-};
-
+// Gemini client service using proxy backend routes for security
 export const generateText = async (prompt: string, systemInstruction?: string) => {
   try {
-    const ai = getAI();
-    if (!ai) throw new Error("API Key not configured");
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
-      config: {
-        systemInstruction,
-      },
+    const response = await fetch("/api/ai/generate-text", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, systemInstruction }),
     });
-    return response.text || "";
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Sunucu hatası");
+    }
+
+    const data = await response.json();
+    return data.text || "";
   } catch (error) {
     console.error("Error generating text:", error);
     throw error;
@@ -43,31 +25,19 @@ export const generateImage = async (
   aspectRatio: "1:1" | "16:9" | "9:16" | "4:3" | "3:4" = "1:1"
 ) => {
   try {
-    const ai = getAI();
-    if (!ai) throw new Error("API Key not configured");
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-image",
-      contents: {
-        parts: [{ text: prompt }],
-      },
-      config: {
-        imageConfig: {
-          aspectRatio,
-        },
-      },
+    const response = await fetch("/api/ai/generate-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, aspectRatio }),
     });
 
-    if (!response.candidates?.[0]?.content?.parts) {
-      throw new Error("AI yanıtı beklenen formatta değil");
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Görsel oluşturma hatası");
     }
 
-    for (const part of response.candidates[0].content.parts) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
-      }
-    }
-    throw new Error("AI görsel verisi döndürmedi");
+    const data = await response.json();
+    return data.image;
   } catch (error) {
     console.error("Error generating image:", error);
     throw error;
@@ -80,39 +50,19 @@ export const editImage = async (
   aspectRatio: "1:1" | "16:9" | "9:16" | "4:3" | "3:4" = "1:1"
 ) => {
   try {
-    const ai = getAI();
-    if (!ai) throw new Error("API Key not configured");
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-image",
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              data: base64Image.split(",")[1],
-              mimeType: "image/png",
-            },
-          },
-          { text: prompt },
-        ],
-      },
-      config: {
-        imageConfig: {
-          aspectRatio,
-        },
-      },
+    const response = await fetch("/api/ai/edit-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ base64Image, prompt, aspectRatio }),
     });
 
-    if (!response.candidates?.[0]?.content?.parts) {
-      throw new Error("AI yanıtı beklenen formatta değil");
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Görsel düzenleme hatası");
     }
 
-    for (const part of response.candidates[0].content.parts) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
-      }
-    }
-    throw new Error("AI düzenlenmiş görsel verisi döndürmedi");
+    const data = await response.json();
+    return data.image;
   } catch (error) {
     console.error("Error editing image:", error);
     throw error;
