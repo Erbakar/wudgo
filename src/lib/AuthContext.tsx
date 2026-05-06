@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { auth, db, handleFirestoreError, OperationType } from './firebase';
 
 interface AuthContextType {
   user: User | null;
@@ -23,8 +23,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         setUser(user);
         if (user) {
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
-          if (userDoc.exists()) {
+          const path = `users/${user.uid}`;
+          let userDoc;
+          try {
+            userDoc = await getDoc(doc(db, 'users', user.uid));
+          } catch (error) {
+            handleFirestoreError(error, OperationType.GET, path);
+            return;
+          }
+
+          if (userDoc && userDoc.exists()) {
             setProfile(userDoc.data());
           } else {
             const newProfile = {
@@ -35,8 +43,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               role: 'user',
               createdAt: serverTimestamp(),
             };
-            await setDoc(doc(db, 'users', user.uid), newProfile);
-            setProfile(newProfile);
+            try {
+              await setDoc(doc(db, 'users', user.uid), newProfile);
+              setProfile(newProfile);
+            } catch (error) {
+              handleFirestoreError(error, OperationType.WRITE, path);
+            }
           }
         } else {
           setProfile(null);

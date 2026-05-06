@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useAuth } from '../lib/AuthContext';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 import { generateImage, editImage } from '../services/gemini';
 import { Image as ImageIcon, Upload, Wand2, Download, RefreshCw, Layers, History, Edit2, Trash2 } from 'lucide-react';
@@ -29,6 +29,8 @@ export default function ImageStudio({ editItem }: ImageStudioProps) {
     const q = query(collection(db, 'products'), where('userId', '==', user.uid));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'products');
     });
     return () => unsubscribe();
   }, [user]);
@@ -74,6 +76,8 @@ export default function ImageStudio({ editItem }: ImageStudioProps) {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const allItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setHistory(allItems.filter((item: any) => item.type === 'image'));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'content');
     });
     return () => unsubscribe();
   }, [user]);
@@ -119,14 +123,18 @@ export default function ImageStudio({ editItem }: ImageStudioProps) {
       const compressed = await compressImage(imageUrl);
       setResult(imageUrl); // Show full res in preview if possible
       
-      await addDoc(collection(db, 'content'), {
-        userId: user.uid,
-        type: 'image',
-        title: prompt.slice(0, 30),
-        content: compressed,
-        prompt,
-        createdAt: serverTimestamp(),
-      });
+      try {
+        await addDoc(collection(db, 'content'), {
+          userId: user.uid,
+          type: 'image',
+          title: prompt.slice(0, 30),
+          content: compressed,
+          prompt,
+          createdAt: serverTimestamp(),
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.CREATE, 'content');
+      }
     } catch (error) {
       console.error(error);
     } finally {
@@ -143,14 +151,18 @@ export default function ImageStudio({ editItem }: ImageStudioProps) {
       const compressed = await compressImage(imageUrl);
       setResult(imageUrl);
       
-      await addDoc(collection(db, 'content'), {
-        userId: user.uid,
-        type: 'image',
-        title: `Edit: ${prompt.slice(0, 20)}`,
-        content: compressed,
-        prompt,
-        createdAt: serverTimestamp(),
-      });
+      try {
+        await addDoc(collection(db, 'content'), {
+          userId: user.uid,
+          type: 'image',
+          title: `Edit: ${prompt.slice(0, 20)}`,
+          content: compressed,
+          prompt,
+          createdAt: serverTimestamp(),
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.CREATE, 'content');
+      }
     } catch (error) {
       console.error(error);
     } finally {
@@ -196,19 +208,20 @@ export default function ImageStudio({ editItem }: ImageStudioProps) {
       // Compress image to ensure it stays under 1MB Firestore limit
       const compressedImageUrl = await compressImage(result);
       
-      await addDoc(collection(db, 'products'), {
-        userId: user.uid,
-        name: prompt.slice(0, 30) || 'Yeni Ürün',
-        price: 0,
-        description: prompt,
-        imageUrl: compressedImageUrl,
-        createdAt: serverTimestamp(),
-      });
-      alert('Görsel başarıyla e-ticaret kataloğuna eklendi!');
-    } catch (error: any) {
-      if (error?.message?.includes('size')) {
-        alert('Görsel boyutu çok büyük olduğu için kaydedilemedi. Lütfen daha kısa bir tarif deneyin.');
+      try {
+        await addDoc(collection(db, 'products'), {
+          userId: user.uid,
+          name: prompt.slice(0, 30) || 'Yeni Ürün',
+          price: 0,
+          description: prompt,
+          imageUrl: compressedImageUrl,
+          createdAt: serverTimestamp(),
+        });
+        alert('Görsel başarıyla e-ticaret kataloğuna eklendi!');
+      } catch (error) {
+        handleFirestoreError(error, OperationType.CREATE, 'products');
       }
+    } catch (error) {
       console.error(error);
     }
   };
@@ -226,7 +239,7 @@ export default function ImageStudio({ editItem }: ImageStudioProps) {
       await deleteDoc(doc(db, 'content', id));
       setDeletingId(null);
     } catch (error) {
-      console.error('Silme hatası:', error);
+      handleFirestoreError(error, OperationType.DELETE, `content/${id}`);
     }
   };
 

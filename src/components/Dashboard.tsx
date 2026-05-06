@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../lib/AuthContext';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, where, onSnapshot, orderBy, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 import { Sparkles, Image as ImageIcon, FileText, ShoppingBag, LogOut, Plus, Search, Trash2, Edit3, Grid, ExternalLink, Download, Menu, X } from 'lucide-react';
 import ImageStudio from './ImageStudio';
@@ -26,6 +26,8 @@ export default function Dashboard() {
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'content');
     });
     return () => unsubscribe();
   }, [user]);
@@ -41,7 +43,7 @@ export default function Dashboard() {
       await deleteDoc(doc(db, 'content', id));
       setDeletingId(null);
     } catch (error) {
-      console.error('Silme hatası:', error);
+      handleFirestoreError(error, OperationType.DELETE, `content/${id}`);
     }
   };
 
