@@ -233,7 +233,7 @@ export default function Dashboard() {
                         <div className="min-w-0 flex-1 mr-4">
                           <h3 className="text-sm font-bold text-gray-900 truncate">{item.title || 'Başlıksız'}</h3>
                           <p className="text-[10px] text-gray-400 font-medium">
-                            {item.createdAt?.toDate().toLocaleDateString('tr-TR')}
+                            {item.createdAt?.toDate ? item.createdAt.toDate().toLocaleDateString('tr-TR') : 'Yükleniyor...'}
                           </p>
                         </div>
                         <button 
