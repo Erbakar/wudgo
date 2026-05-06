@@ -47,8 +47,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async () => {
-    const { signInWithPopup, GoogleAuthProvider } = await import('firebase/auth');
-    await signInWithPopup(auth, new GoogleAuthProvider());
+    try {
+      const { signInWithPopup, GoogleAuthProvider } = await import('firebase/auth');
+      await signInWithPopup(auth, new GoogleAuthProvider());
+    } catch (error: any) {
+      console.error("Giriş Hatası Detayı:", error);
+      alert("Giriş yapılamadı: " + (error.message || "Bilinmeyen hata"));
+    }
   };
 
   const handleSignOut = async () => {
