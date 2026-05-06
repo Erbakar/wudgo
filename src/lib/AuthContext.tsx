@@ -20,27 +20,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user);
-      if (user) {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          setProfile(userDoc.data());
+      try {
+        setUser(user);
+        if (user) {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            setProfile(userDoc.data());
+          } else {
+            const newProfile = {
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName,
+              photoURL: user.photoURL,
+              role: 'user',
+              createdAt: serverTimestamp(),
+            };
+            await setDoc(doc(db, 'users', user.uid), newProfile);
+            setProfile(newProfile);
+          }
         } else {
-          const newProfile = {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName,
-            photoURL: user.photoURL,
-            role: 'user',
-            createdAt: serverTimestamp(),
-          };
-          await setDoc(doc(db, 'users', user.uid), newProfile);
-          setProfile(newProfile);
+          setProfile(null);
         }
-      } else {
-        setProfile(null);
+      } catch (error) {
+        console.error("Auth initialization error:", error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -52,7 +57,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await signInWithPopup(auth, new GoogleAuthProvider());
     } catch (error: any) {
       console.error("Giriş Hatası Detayı:", error);
-      alert("Giriş yapılamadı: " + (error.message || "Bilinmeyen hata"));
+      if (error.code === 'auth/unauthorized-domain') {
+        alert("HATA: Bu alan adı (domain) Firebase'de yetkilendirilmemiş. \n\nLütfen Firebase Console > Authentication > Settings > Authorized Domains kısmına şu anki site adresinizi ekleyin.");
+      } else {
+        alert("Giriş yapılamadı: " + (error.message || "Bilinmeyen hata"));
+      }
     }
   };
 

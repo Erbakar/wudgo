@@ -6,8 +6,8 @@ const getAI = () => {
   if (!aiInstance) {
     // Try to get key from multiple possible sources
     const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || 
-                   process.env.GEMINI_API_KEY || 
-                   process.env.VITE_GEMINI_API_KEY;
+                   (import.meta as any).env?.GEMINI_API_KEY || 
+                   "AIzaSyDrSupsS8lA3FC3-1GNEDA9qGiLkwCDUlE"; // User provided backup key
     
     if (!apiKey) {
       console.warn("GEMINI_API_KEY missing. Check environment variables.");
@@ -25,7 +25,7 @@ export const generateText = async (prompt: string, systemInstruction?: string) =
     if (!ai) throw new Error("API Key not configured");
 
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
         systemInstruction,
@@ -47,7 +47,7 @@ export const generateImage = async (
     if (!ai) throw new Error("API Key not configured");
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-2.5-flash-image",
       contents: {
         parts: [{ text: prompt }],
       },
@@ -84,7 +84,7 @@ export const editImage = async (
     if (!ai) throw new Error("API Key not configured");
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-2.5-flash-image",
       contents: {
         parts: [
           {
