@@ -4,11 +4,14 @@ let aiInstance: GoogleGenAI | null = null;
 
 const getAI = () => {
   if (!aiInstance) {
-    const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
+    // Try to get key from multiple possible sources
+    const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY || 
+                   process.env.GEMINI_API_KEY || 
+                   process.env.VITE_GEMINI_API_KEY;
     
     if (!apiKey) {
-      console.warn("GEMINI_API_KEY is not defined. Please set it in your environment variables.");
-      throw new Error("Gemini API anahtarı ayarlanmamış. Lütfen ortam değişkenlerini kontrol edin.");
+      console.warn("GEMINI_API_KEY missing. Check environment variables.");
+      return null;
     }
     
     aiInstance = new GoogleGenAI({ apiKey });
@@ -19,8 +22,10 @@ const getAI = () => {
 export const generateText = async (prompt: string, systemInstruction?: string) => {
   try {
     const ai = getAI();
+    if (!ai) throw new Error("API Key not configured");
+
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-1.5-flash",
       contents: prompt,
       config: {
         systemInstruction,
@@ -39,8 +44,10 @@ export const generateImage = async (
 ) => {
   try {
     const ai = getAI();
+    if (!ai) throw new Error("API Key not configured");
+
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-image",
+      model: "gemini-2.0-flash-exp",
       contents: {
         parts: [{ text: prompt }],
       },
@@ -74,8 +81,10 @@ export const editImage = async (
 ) => {
   try {
     const ai = getAI();
+    if (!ai) throw new Error("API Key not configured");
+
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-image",
+      model: "gemini-2.0-flash-exp",
       contents: {
         parts: [
           {

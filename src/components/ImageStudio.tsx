@@ -18,8 +18,8 @@ export default function ImageStudio({ editItem }: ImageStudioProps) {
   const [mode, setMode] = useState<'generate' | 'edit'>('generate');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [history, setHistory] = useState<any[]>([]);
-  const [width, setWidth] = useState(1024);
-  const [height, setHeight] = useState(1024);
+  const [width, setWidth] = useState<number | string>(1024);
+  const [height, setHeight] = useState<number | string>(1024);
   const [products, setProducts] = useState<any[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -44,7 +44,9 @@ export default function ImageStudio({ editItem }: ImageStudioProps) {
   }, [editItem]);
 
   const getEffectiveParams = () => {
-    const ratio = width / height;
+    const w = Number(width) || 1024;
+    const h = Number(height) || 1024;
+    const ratio = w / h;
     const supportedRatios = [
       { name: "1:1", val: 1.0 },
       { name: "4:3", val: 4/3 },
@@ -314,7 +316,7 @@ export default function ImageStudio({ editItem }: ImageStudioProps) {
                   <input
                     type="number"
                     value={width}
-                    onChange={(e) => setWidth(Number(e.target.value))}
+                    onChange={(e) => setWidth(e.target.value === '' ? '' : Number(e.target.value))}
                     min="256"
                     max="4096"
                     className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-brand-accent/20 outline-none transition-all"
@@ -328,7 +330,7 @@ export default function ImageStudio({ editItem }: ImageStudioProps) {
                   <input
                     type="number"
                     value={height}
-                    onChange={(e) => setHeight(Number(e.target.value))}
+                    onChange={(e) => setHeight(e.target.value === '' ? '' : Number(e.target.value))}
                     min="256"
                     max="4096"
                     className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-brand-accent/20 outline-none transition-all"

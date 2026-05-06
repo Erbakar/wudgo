@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../lib/AuthContext';
 import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot, orderBy, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
-import { Sparkles, Image as ImageIcon, FileText, ShoppingBag, LogOut, Plus, Search, Trash2, Edit3, Grid, ExternalLink, Download } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, FileText, ShoppingBag, LogOut, Plus, Search, Trash2, Edit3, Grid, ExternalLink, Download, Menu, X } from 'lucide-react';
 import ImageStudio from './ImageStudio';
 import ContentStudio from './ContentStudio';
 import Ecommerce from './Ecommerce';
@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingItem, setEditingItem] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -59,10 +60,43 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] flex">
+    <div className="min-h-screen bg-[#F8F9FA] flex flex-col lg:flex-row">
+      {/* Mobile Header */}
+      <header className="lg:hidden bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-brand-accent rounded-lg flex items-center justify-center">
+            <Sparkles className="text-white w-5 h-5" />
+          </div>
+          <span className="text-xl font-bold tracking-tight">Wutgo</span>
+        </div>
+        <button 
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="p-2 text-gray-500 hover:bg-gray-50 rounded-xl transition-all"
+        >
+          {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        </button>
+      </header>
+
+      {/* Sidebar Overlay */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30 lg:hidden"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-100 flex flex-col fixed h-full z-10">
-        <div className="p-6 flex items-center gap-2">
+      <aside className={`
+        fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-100 flex flex-col z-40 transition-transform duration-300 transform 
+        lg:translate-x-0 lg:static lg:h-screen
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        <div className="p-6 hidden lg:flex items-center gap-2">
           <div className="w-8 h-8 bg-brand-accent rounded-lg flex items-center justify-center">
             <Sparkles className="text-white w-5 h-5" />
           </div>
@@ -78,7 +112,10 @@ export default function Dashboard() {
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => {
+                setActiveTab(tab.id as any);
+                setSidebarOpen(false);
+              }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                 activeTab === tab.id 
                   ? 'bg-brand-primary text-white shadow-lg shadow-black/10' 
@@ -110,26 +147,26 @@ export default function Dashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 ml-64 p-8">
-        <header className="flex justify-between items-center mb-8">
+      <main className="flex-1 p-4 sm:p-8 overflow-x-hidden">
+        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
               {activeTab === 'images' && 'Görsel Stüdyosu'}
               {activeTab === 'content' && 'İçerik Stüdyosu'}
               {activeTab === 'archive' && 'Tüm Üretimlerim'}
               {activeTab === 'shop' && 'E-Ticaret'}
             </h1>
-            <p className="text-gray-500">Tekrar hoş geldin, {user?.displayName?.split(' ')[0]}</p>
+            <p className="text-sm sm:text-base text-gray-500">Tekrar hoş geldin, {user?.displayName?.split(' ')[0]}</p>
           </div>
-          <div className="flex gap-4">
-            <div className="relative">
+          <div className="flex w-full sm:w-auto gap-4">
+            <div className="relative flex-1 sm:flex-none">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input 
                 type="text" 
                 placeholder="Üretimlerinde ara..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-all w-64"
+                className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent/20 transition-all w-full sm:w-64"
               />
             </div>
           </div>
