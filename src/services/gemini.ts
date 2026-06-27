@@ -12,30 +12,45 @@ const getClientAI = () => {
   return new GoogleGenAI({ apiKey });
 };
 
+// Safe server-side proxy caller. If the route doesn't exist, or returns HTML (such as SPA redirects on Netlify),
+// it throws a specific error to trigger the client-side Gemini fallback.
+const tryServerProxy = async (url: string, body: object): Promise<any> => {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  const contentType = response.headers.get("content-type");
+  const isJson = contentType && contentType.includes("application/json");
+
+  if (!isJson) {
+    // If not JSON (e.g., Netlify serving index.html on redirect), treat it as proxy not found
+    throw new Error("SERVER_PROXY_NOT_FOUND");
+  }
+
+  if (response.ok) {
+    return await response.json();
+  }
+
+  if (response.status === 404) {
+    throw new Error("SERVER_PROXY_NOT_FOUND");
+  }
+
+  const errorData = await response.json().catch(() => ({ error: "Sunucu hatası" }));
+  throw new Error(errorData.error || "Sunucu hatası");
+};
+
 // Gemini client service with automatic server-proxy to client-fallback logic
 export const generateText = async (prompt: string, systemInstruction?: string) => {
   try {
     // 1. Try Server Proxy first
     try {
-      const response = await fetch("/api/ai/generate-text", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, systemInstruction }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        return data.text || "";
-      }
-      
-      // If server returns 404, we'll try client fallback
-      if (response.status !== 404) {
-        const errorData = await response.json().catch(() => ({ error: "Sunucu hatası" }));
-        throw new Error(errorData.error || "Sunucu hatası");
-      }
+      const data = await tryServerProxy("/api/ai/generate-text", { prompt, systemInstruction });
+      return data.text || "";
     } catch (serverError: any) {
-      if (!serverError.message?.includes("404")) throw serverError;
-      console.log("Server proxy not found (404), trying client fallback...");
+      if (serverError.message !== "SERVER_PROXY_NOT_FOUND") throw serverError;
+      console.log("Server proxy not found or returned non-JSON, trying client fallback...");
     }
 
     // 2. Client Side Fallback (for static hosting like Netlify)
@@ -61,24 +76,11 @@ export const generateImage = async (
   try {
     // 1. Try Server Proxy
     try {
-      const response = await fetch("/api/ai/generate-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, aspectRatio }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        return data.image;
-      }
-
-      if (response.status !== 404) {
-        const errorData = await response.json().catch(() => ({ error: "Görsel oluşturma hatası" }));
-        throw new Error(errorData.error || "Görsel oluşturma hatası");
-      }
+      const data = await tryServerProxy("/api/ai/generate-image", { prompt, aspectRatio });
+      return data.image;
     } catch (serverError: any) {
-      if (!serverError.message?.includes("404")) throw serverError;
-      console.log("Server proxy not found (404), trying client fallback...");
+      if (serverError.message !== "SERVER_PROXY_NOT_FOUND") throw serverError;
+      console.log("Server proxy not found or returned non-JSON, trying client fallback...");
     }
 
     // 2. Client Side Fallback
@@ -112,24 +114,11 @@ export const editImage = async (
   try {
     // 1. Try Server Proxy
     try {
-      const response = await fetch("/api/ai/edit-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ base64Image, prompt, aspectRatio }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        return data.image;
-      }
-
-      if (response.status !== 404) {
-        const errorData = await response.json().catch(() => ({ error: "Görsel düzenleme hatası" }));
-        throw new Error(errorData.error || "Görsel düzenleme hatası");
-      }
+      const data = await tryServerProxy("/api/ai/edit-image", { base64Image, prompt, aspectRatio });
+      return data.image;
     } catch (serverError: any) {
-      if (!serverError.message?.includes("404")) throw serverError;
-      console.log("Server proxy not found (404), trying client fallback...");
+      if (serverError.message !== "SERVER_PROXY_NOT_FOUND") throw serverError;
+      console.log("Server proxy not found or returned non-JSON, trying client fallback...");
     }
 
     // 2. Client Side Fallback
