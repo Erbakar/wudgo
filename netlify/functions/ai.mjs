@@ -20,6 +20,29 @@ const getRoute = (event) => {
   return path.split("/").filter(Boolean).pop();
 };
 
+const getErrorResponse = (error) => {
+  const rawMessage = error instanceof Error ? error.message : "AI server error";
+
+  try {
+    const parsed = JSON.parse(rawMessage);
+    const googleError = parsed.error;
+    if (googleError?.status === "RESOURCE_EXHAUSTED") {
+      return json(429, {
+        error:
+          "Gemini quota exceeded for the selected model. Check the Google AI project billing/quota settings.",
+      });
+    }
+
+    if (googleError?.code) {
+      return json(googleError.code, { error: googleError.message || rawMessage });
+    }
+  } catch {
+    // The SDK sometimes throws regular Error messages instead of JSON payloads.
+  }
+
+  return json(500, { error: rawMessage });
+};
+
 export const handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return json(405, { error: "Method not allowed" });
@@ -93,6 +116,6 @@ export const handler = async (event) => {
     return json(404, { error: "AI route not found" });
   } catch (error) {
     console.error("AI function error:", error);
-    return json(500, { error: error instanceof Error ? error.message : "AI server error" });
+    return getErrorResponse(error);
   }
 };
