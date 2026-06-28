@@ -12,7 +12,8 @@ const getAI = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const textModel = process.env.GEMINI_TEXT_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const imageModel = process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image";
 
 const getRoute = (event) => {
   const path = event.path || "";
@@ -42,7 +43,7 @@ export const handler = async (event) => {
     if (route === "generate-text") {
       const { prompt, systemInstruction } = payload;
       const response = await ai.models.generateContent({
-        model,
+        model: textModel,
         contents: prompt,
         config: { systemInstruction },
       });
@@ -52,9 +53,9 @@ export const handler = async (event) => {
     if (route === "generate-image") {
       const { prompt, aspectRatio = "1:1" } = payload;
       const response = await ai.models.generateContent({
-        model,
+        model: imageModel,
         contents: prompt,
-        config: { imageConfig: { aspectRatio } },
+        config: { responseModalities: ["TEXT", "IMAGE"], imageConfig: { aspectRatio } },
       });
 
       const part = response.candidates?.[0]?.content?.parts?.find((item) => item.inlineData);
@@ -67,7 +68,7 @@ export const handler = async (event) => {
     if (route === "edit-image") {
       const { base64Image, prompt, aspectRatio = "1:1" } = payload;
       const response = await ai.models.generateContent({
-        model,
+        model: imageModel,
         contents: {
           parts: [
             {
@@ -79,7 +80,7 @@ export const handler = async (event) => {
             { text: prompt },
           ],
         },
-        config: { imageConfig: { aspectRatio } },
+        config: { responseModalities: ["TEXT", "IMAGE"], imageConfig: { aspectRatio } },
       });
 
       const part = response.candidates?.[0]?.content?.parts?.find((item) => item.inlineData);
